@@ -1,0 +1,51 @@
+name: Laravel Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Repository’ni klonlash
+      uses: actions/checkout@v3
+
+    - name: PHP o‘rnatish
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.1'
+        extensions: mbstring, exif, pcntl, bcmath, gd
+        coverage: none
+
+    - name: Laravel uchun dependency’larni yuklash
+      run: composer install --no-dev --optimize-autoloader
+
+    - name: Environment sozlash
+      run: |
+        cp .env.example .env
+        php artisan key:generate
+
+    - name: Migration va Cache tozalash
+      run: |
+        php artisan migrate --force
+        php artisan config:clear
+        php artisan cache:clear
+
+    - name: Laravelni deploy qilish
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd /var/www/laravel
+          git pull origin main
+          composer install --no-dev --optimize-autoloader
+          php artisan migrate --force
+          php artisan cache:clear
+          php artisan config:clear
+          php artisan queue:restart
+          sudo systemctl restart nginx
